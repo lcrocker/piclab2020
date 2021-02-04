@@ -1,6 +1,8 @@
 import minimist from 'https://deno.land/x/deno_minimist@v1.0.2/mod.ts';
 import { BufReader } from 'https://deno.land/std/io/bufio.ts';
+
 import { TypeId, typeName, Chunk, InputStream as PNGFile } from './png.ts';
+import { Image2d } from './image2d.ts';
 
 const SCALE = 1. / 255;
 function byteToFloat(b: number): number { return SCALE * b; }
