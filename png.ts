@@ -4,9 +4,31 @@ import { BufReader } from 'https://deno.land/std/io/bufio.ts';
 
 export const TypeId = {
 	IHDR:	0x49484452,
+	PLTE:	0x504C5445,
 	IDAT:	0x49444154,
-	IEND:	0x49454E44
+	IEND:	0x49454E44,
+	tRNS:	0x74524E53,
+	cHRM:	0x0,
+	gAMA:	0x0,
+	iCCP:	0x0,
+	sBIT:	0x0,
+	sRGB:	0x0,
+	tEXt:	0x0,
+	zTXt:	0x0,
+	iTXt:	0x0,
+	bKGD:	0x0,
+	hIST:	0x0,
+	pHYs:	0x0,
+	sPLT:	0x0,
+	tIME:	0x0,
+	dSIG:	0x0,
+	eXIf:	0x0,
+	sTER:	0x0
 }
+export function isCritical(id: number) { return (0 === (id & 0x20000000)); }
+export function isAncillary(id: number) { return (0 !== (id & 0x20000000)); }
+export function isPublic(id: number) { return (0 === (id & 0x00200000)); }
+export function isCopySafe(id: number) { return (0 !== (id & 0x00000020)); }
 
 export const enum ColorType {
 	Gray = 0,
@@ -114,6 +136,7 @@ export function typeName(id: number) {
 export class InputStream {
 	private reader: BufReader | null = null;
 	private partial: any = null;
+	private info: Record<number, Chunk> = {};
 
 	constructor() {
 	}
@@ -197,6 +220,9 @@ export class InputStream {
 			partial.data = unzlib(partial.data);
 			yield this.decode(partial);
 			partial = null;
+		}
+		if (TypeId.IHDR === chunk.type) {
+			this.info[TypeId.IHDR] = chunk;
 		}
 		yield this.decode(chunk);
 	    } while (TypeId.IEND !== type);
