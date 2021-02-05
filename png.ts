@@ -2,6 +2,8 @@
 import { zlib, unzlib } from 'https://deno.land/x/denoflate/mod.ts';
 import { BufReader } from 'https://deno.land/std/io/bufio.ts';
 
+import { Image2d } from './image2d.ts';
+
 export const TypeId = {
 	IHDR:	0x49484452,
 	PLTE:	0x504C5445,
@@ -226,5 +228,8 @@ export class InputStream {
 		}
 		yield this.decode(chunk);
 	    } while (TypeId.IEND !== type);
+	}
+
+	static newImageFromFile(name: string): Image2d {
 	}
 }
