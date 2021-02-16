@@ -1,0 +1,9 @@
+Floating point numbers in the range (0,1) are represented as strings in the 
+following way:
+
+0 is represented as "0"
+1 is represented as "1"
+
+Numbers between 0 and 1 are first converted to an integer which is the
+numerator of the fraction with the denominator 8388608 (2 ** 23), then
+encoded in base64 (
