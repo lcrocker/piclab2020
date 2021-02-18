@@ -398,6 +398,91 @@ export class PhysicalSizeChunk extends BaseChunk {
 	}
 }
 
+export class ExtendedPaletteChunk extends BaseChunk {
+	constructor(t: number,
+			d: Uint8Array) {
+		super(t, d);
+	}
+
+	toBytes(): Uint8Array {
+		const result = new Uint8Array(4);
+		// TODO
+		return result;
+	}
+
+	static fromBytes(d: Uint8Array): ExtendedPaletteChunk {
+		return new ExtendedPaletteChunk(TypeId.sPLT, d);
+	}
+}
+
+export class TimeChunk extends BaseChunk {
+	constructor(t: number,
+			d: Uint8Array) {
+		super(t, d);
+	}
+
+	toBytes(): Uint8Array {
+		const result = new Uint8Array(4);
+		// TODO
+		return result;
+	}
+
+	static fromBytes(d: Uint8Array): TimeChunk {
+		return new TimeChunk(TypeId.tIME, d);
+	}
+}
+
+export class SignatureChunk extends BaseChunk {
+	constructor(t: number,
+			d: Uint8Array) {
+		super(t, d);
+	}
+
+	toBytes(): Uint8Array {
+		const result = new Uint8Array(4);
+		// TODO
+		return result;
+	}
+
+	static fromBytes(d: Uint8Array): SignatureChunk {
+		return new SignatureChunk(TypeId.dSIG, d);
+	}
+}
+
+export class ExifChunk extends BaseChunk {
+	constructor(t: number,
+			d: Uint8Array) {
+		super(t, d);
+	}
+
+	toBytes(): Uint8Array {
+		const result = new Uint8Array(4);
+		// TODO
+		return result;
+	}
+
+	static fromBytes(d: Uint8Array): ExifChunk {
+		return new ExifChunk(TypeId.eXIf, d);
+	}
+}
+
+export class StereoChunk extends BaseChunk {
+	constructor(t: number,
+			d: Uint8Array) {
+		super(t, d);
+	}
+
+	toBytes(): Uint8Array {
+		const result = new Uint8Array(4);
+		// TODO
+		return result;
+	}
+
+	static fromBytes(d: Uint8Array): StereoChunk {
+		return new StereoChunk(TypeId.sTER, d);
+	}
+}
+
 export function isChunk(obj: any): obj is Chunk {
     if ('number' !== typeof obj.type) return false;
     if (! obj.data) return false;
@@ -492,7 +577,7 @@ export class PNGStream {
 		case TypeId.pHYs:
 			return PhysicalSizeChunk.fromBytes(cin.data);
 		case TypeId.sPLT:
-			return ExtendedPalletteChunk.fromBytes(cin.data);
+			return ExtendedPaletteChunk.fromBytes(cin.data);
 		case TypeId.tIME:
 			return TimeChunk.fromBytes(cin.data);
 		case TypeId.dSIG:
