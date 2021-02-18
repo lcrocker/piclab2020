@@ -2,8 +2,8 @@
 ## Graphics processing in Deno
 
 In the late 1980s and early 90s, I wrote a program for MS-DOS called "Piclab"
-that did some basic image processing. I was a scriptable command-line program
-that served to compensate for the fact that I couldn't afford a fancy color-
+that did some basic image processing. It was a scriptable command-line program
+that served to compensate for the fact that I couldn't afford a fancy color
 graphics PC at the time, but I wanted to do things like print color images to
 my HP PaintJet (the very first inkjet printer available to the public). I
 abandoned the project when PCs with color graphics became commonplace, and
@@ -26,5 +26,6 @@ likely add some kind of browser-based display and GUI capability for those
 times when it is needed.
 
 --Lee Daniel Crocker
+
 January, 2021
 
