@@ -2,31 +2,32 @@
 import { zlib, unzlib } from 'https://deno.land/x/denoflate/mod.ts';
 import { BufReader } from 'https://deno.land/std/io/bufio.ts';
 
-import { Image2d } from './image2d.ts';
+import { Image2d, Image2dOrNull } from './image2d.ts';
 
-export const TypeId = {
+export const TypeId: Record<string, number> = {
 	IHDR:	0x49484452,
 	PLTE:	0x504C5445,
 	IDAT:	0x49444154,
 	IEND:	0x49454E44,
 	tRNS:	0x74524E53,
-	cHRM:	0x0,
-	gAMA:	0x0,
-	iCCP:	0x0,
-	sBIT:	0x0,
-	sRGB:	0x0,
-	tEXt:	0x0,
-	zTXt:	0x0,
-	iTXt:	0x0,
-	bKGD:	0x0,
-	hIST:	0x0,
-	pHYs:	0x0,
-	sPLT:	0x0,
-	tIME:	0x0,
-	dSIG:	0x0,
-	eXIf:	0x0,
-	sTER:	0x0
+	cHRM:	0x6348524D,
+	gAMA:	0x67414D41,
+	iCCP:	0x69434350,
+	sBIT:	0x73424954,
+	sRGB:	0x73524742,
+	tEXt:	0x74455874,
+	zTXt:	0x7a545874,
+	iTXt:	0x69545874,
+	bKGD:	0x624B4744,
+	hIST:	0x68495354,
+	pHYs:	0x70485973,
+	sPLT:	0x73504C54,
+	tIME:	0x74494D45,
+	dSIG:	0x64534947,
+	eXIf:	0x65584966,
+	sTER:	0x73544552
 }
+
 export function isCritical(id: number) { return (0 === (id & 0x20000000)); }
 export function isAncillary(id: number) { return (0 !== (id & 0x20000000)); }
 export function isPublic(id: number) { return (0 === (id & 0x00200000)); }
@@ -80,6 +81,14 @@ export class BaseChunk implements Chunk {
 	toString(): string {
 		return `${typeName(this.type)} (${this.data.length} bytes)`;
 	}
+
+	toBytes(): Uint8Array {
+		throw new Error('toBytes() must be implemented in subclass');
+	}
+
+	static fromBytes(d: Uint8Array): BaseChunk {
+		throw new Error('fromBytes() must be implemented in subclass');
+	}
 }
 
 export class HeaderChunk extends BaseChunk {
@@ -101,6 +110,7 @@ export class HeaderChunk extends BaseChunk {
 			f: number,
 			i: number) {
 		super(t, d);
+
 		this.width = w;
 		this.height = h;
 		this.bitDepth = b;
@@ -119,6 +129,273 @@ export class HeaderChunk extends BaseChunk {
 	toString(): string {
 		return `IHDR (${this.width} x ${this.height} x ${this.bitDepth} ${colorTypeIndicators[this.colorType]} ${compressionMethodIndicators[this.compressionMethod]} ${filterMethodIndicators[this.filterMethod]} ${interlaceMethodIndicators[this.interlaceMethod]})`;
 	}
+
+	toBytes(): Uint8Array {
+		const result = new Uint8Array(12);
+		// TODO
+		return result;
+	}
+
+	static fromBytes(d: Uint8Array): HeaderChunk {
+		const width = (d[0] << 24) + (d[1] << 16) + (d[2] << 8) + d[3];
+		const height = (d[4] << 24) + (d[4] << 16) + (d[6] << 8) + d[7];
+		return new HeaderChunk(TypeId.IHDR, d, width, height, d[8], d[9], d[10], d[11], d[12]);
+	}
+}
+
+export class PaletteChunk extends BaseChunk {
+	constructor(t: number,
+			d: Uint8Array) {
+		super(t, d);
+	}
+
+	toBytes(): Uint8Array {
+		const result = new Uint8Array(4);
+		// TODO
+		return result;
+	}
+
+	static fromBytes(d: Uint8Array): PaletteChunk {
+		return new PaletteChunk(TypeId.PLTE, d);
+	}
+}
+
+export class ImageDataChunk extends BaseChunk {
+	constructor(t: number,
+			d: Uint8Array) {
+		super(t, d);
+	}
+
+	toBytes(): Uint8Array {
+		const result = new Uint8Array(4);
+		// TODO
+		return result;
+	}
+
+	static fromBytes(d: Uint8Array): ImageDataChunk {
+		return new ImageDataChunk(TypeId.IDAT, d);
+	}
+}
+
+export class EndChunk extends BaseChunk {
+	constructor(t: number,
+			d: Uint8Array) {
+		super(t, d);
+	}
+
+	toBytes(): Uint8Array {
+		const result = new Uint8Array(4);
+		// TODO
+		return result;
+	}
+
+	static fromBytes(d: Uint8Array): EndChunk {
+		return new EndChunk(TypeId.IEND, d);
+	}
+}
+
+export class TransparencyChunk extends BaseChunk {
+	constructor(t: number,
+			d: Uint8Array) {
+		super(t, d);
+	}
+
+	toBytes(): Uint8Array {
+		const result = new Uint8Array(4);
+		// TODO
+		return result;
+	}
+
+	static fromBytes(d: Uint8Array): TransparencyChunk {
+		return new TransparencyChunk(TypeId.tRNS, d);
+	}
+}
+
+export class ChromaticityChunk extends BaseChunk {
+	constructor(t: number,
+			d: Uint8Array) {
+		super(t, d);
+	}
+
+	toBytes(): Uint8Array {
+		const result = new Uint8Array(4);
+		// TODO
+		return result;
+	}
+
+	static fromBytes(d: Uint8Array): ChromaticityChunk {
+		return new ChromaticityChunk(TypeId.cHRM, d);
+	}
+}
+
+export class GammaChunk extends BaseChunk {
+	constructor(t: number,
+			d: Uint8Array) {
+		super(t, d);
+	}
+
+	toBytes(): Uint8Array {
+		const result = new Uint8Array(4);
+		// TODO
+		return result;
+	}
+
+	static fromBytes(d: Uint8Array): GammaChunk {
+		return new GammaChunk(TypeId.gAMA, d);
+	}
+}
+
+export class ICCPChunk extends BaseChunk {
+	constructor(t: number,
+			d: Uint8Array) {
+		super(t, d);
+	}
+
+	toBytes(): Uint8Array {
+		const result = new Uint8Array(4);
+		// TODO
+		return result;
+	}
+
+	static fromBytes(d: Uint8Array): ICCPChunk {
+		return new ICCPChunk(TypeId.iCCP, d);
+	}
+}
+
+export class BitDepthChunk extends BaseChunk {
+	constructor(t: number,
+			d: Uint8Array) {
+		super(t, d);
+	}
+
+	toBytes(): Uint8Array {
+		const result = new Uint8Array(4);
+		// TODO
+		return result;
+	}
+
+	static fromBytes(d: Uint8Array): BitDepthChunk {
+		return new BitDepthChunk(TypeId.sBIT, d);
+	}
+}
+
+export class SRGBChunk extends BaseChunk {
+	constructor(t: number,
+			d: Uint8Array) {
+		super(t, d);
+	}
+
+	toBytes(): Uint8Array {
+		const result = new Uint8Array(4);
+		// TODO
+		return result;
+	}
+
+	static fromBytes(d: Uint8Array): SRGBChunk {
+		return new SRGBChunk(TypeId.sRGB, d);
+	}
+}
+
+export class TextChunk extends BaseChunk {
+	constructor(t: number,
+			d: Uint8Array) {
+		super(t, d);
+	}
+
+	toBytes(): Uint8Array {
+		const result = new Uint8Array(4);
+		// TODO
+		return result;
+	}
+
+	static fromBytes(d: Uint8Array): TextChunk {
+		return new TextChunk(TypeId.tEXt, d);
+	}
+}
+
+export class ZTextChunk extends BaseChunk {
+	constructor(t: number,
+			d: Uint8Array) {
+		super(t, d);
+	}
+
+	toBytes(): Uint8Array {
+		const result = new Uint8Array(4);
+		// TODO
+		return result;
+	}
+
+	static fromBytes(d: Uint8Array): ZTextChunk {
+		return new ZTextChunk(TypeId.zTXt, d);
+	}
+}
+
+export class ITextChunk extends BaseChunk {
+	constructor(t: number,
+			d: Uint8Array) {
+		super(t, d);
+	}
+
+	toBytes(): Uint8Array {
+		const result = new Uint8Array(4);
+		// TODO
+		return result;
+	}
+
+	static fromBytes(d: Uint8Array): ITextChunk {
+		return new ITextChunk(TypeId.iTXt, d);
+	}
+}
+
+export class BackgroundChunk extends BaseChunk {
+	constructor(t: number,
+			d: Uint8Array) {
+		super(t, d);
+	}
+
+	toBytes(): Uint8Array {
+		const result = new Uint8Array(4);
+		// TODO
+		return result;
+	}
+
+	static fromBytes(d: Uint8Array): BackgroundChunk {
+		return new BackgroundChunk(TypeId.bKGD, d);
+	}
+}
+
+export class HistogramChunk extends BaseChunk {
+	constructor(t: number,
+			d: Uint8Array) {
+		super(t, d);
+	}
+
+	toBytes(): Uint8Array {
+		const result = new Uint8Array(4);
+		// TODO
+		return result;
+	}
+
+	static fromBytes(d: Uint8Array): HistogramChunk {
+		return new HistogramChunk(TypeId.hIST, d);
+	}
+}
+
+export class PhysicalSizeChunk extends BaseChunk {
+	constructor(t: number,
+			d: Uint8Array) {
+		super(t, d);
+	}
+
+	toBytes(): Uint8Array {
+		const result = new Uint8Array(4);
+		// TODO
+		return result;
+	}
+
+	static fromBytes(d: Uint8Array): PhysicalSizeChunk {
+		return new PhysicalSizeChunk(TypeId.pHYs, d);
+	}
 }
 
 export function isChunk(obj: any): obj is Chunk {
@@ -135,16 +412,15 @@ export function typeName(id: number) {
 		String.fromCharCode(0xFF & id);
 }
 
-export class InputStream {
-	private reader: BufReader | null = null;
+export class PNGStream {
+	private reader: BufReader;
 	private partial: any = null;
-	private info: Record<number, Chunk> = {};
 
-	constructor() {
+	constructor(r: BufReader) {
+		this.reader = r;
 	}
 
-	async open(r: BufReader): Promise<void> {
-		this.reader = r;
+	async open(): Promise<void> {
 		const h1 = await this.readUint32();
 		const h2 = await this.readUint32();
 		if (! (0x89504E47 === h1 && 0x0D0A1A0A === h2))
@@ -181,25 +457,55 @@ export class InputStream {
 	    return new BaseChunk(type, data);
 	}
 
-	decode(cin: BaseChunk): Chunk {
-		if (TypeId.IHDR === cin.type) {
-			const width = (cin.data[0] << 24) + (cin.data[1] << 16) +
-				(cin.data[2] << 8) + cin.data[3];
-			const height = (cin.data[4] << 24) + (cin.data[4] << 16) +
-				(cin.data[6] << 8) + cin.data[7];
-			const b = cin.data[8];
-			const c = cin.data[9];
-			const z = cin.data[10];
-			const f = cin.data[11];
-			const i = cin.data[12];
-
-			const cout = new HeaderChunk(cin.type, cin.data, width, height, b, c, z, f, i);
-			return cout;
+	decode(cin: Chunk): BaseChunk {
+		switch (cin.type) {
+		case TypeId.IHDR:
+			return HeaderChunk.fromBytes(cin.data);
+		case TypeId.PLTE:
+			return PaletteChunk.fromBytes(cin.data);
+		case TypeId.IDAT:
+			return ImageDataChunk.fromBytes(cin.data);
+		case TypeId.IEND:
+			return EndChunk.fromBytes(cin.data);
+		case TypeId.tRNS:
+			return TransparencyChunk.fromBytes(cin.data);
+		case TypeId.cHRM:
+			return ChromaticityChunk.fromBytes(cin.data);
+		case TypeId.gAMA:
+			return GammaChunk.fromBytes(cin.data);
+		case TypeId.iCCP:
+			return ICCPChunk.fromBytes(cin.data);
+		case TypeId.sBIT:
+			return BitDepthChunk.fromBytes(cin.data);
+		case TypeId.sRGB:
+			return SRGBChunk.fromBytes(cin.data);
+		case TypeId.tEXt:
+			return TextChunk.fromBytes(cin.data);
+		case TypeId.zTXt:
+			return ZTextChunk.fromBytes(cin.data);
+		case TypeId.iTXt:
+			return ITextChunk.fromBytes(cin.data);
+		case TypeId.bKGD:
+			return BackgroundChunk.fromBytes(cin.data);
+		case TypeId.hIST:
+			return HistogramChunk.fromBytes(cin.data);
+		case TypeId.pHYs:
+			return PhysicalSizeChunk.fromBytes(cin.data);
+		case TypeId.sPLT:
+			return ExtendedPalletteChunk.fromBytes(cin.data);
+		case TypeId.tIME:
+			return TimeChunk.fromBytes(cin.data);
+		case TypeId.dSIG:
+			return SignatureChunk.fromBytes(cin.data);
+		case TypeId.eXIf:
+			return ExifChunk.fromBytes(cin.data);
+		case TypeId.sTER:
+			return StereoChunk.fromBytes(cin.data);
 		}
-		return cin;
+		throw new Error(`unknown chunk type ${cin.type.toString(16)}`);
 	}
 
-	async *chunks(): AsyncGenerator<Chunk> {
+	async *chunks(): AsyncGenerator<BaseChunk> {
 	    let type = 0;
 	    let partial: Chunk | null = null;
 
@@ -223,13 +529,59 @@ export class InputStream {
 			yield this.decode(partial);
 			partial = null;
 		}
-		if (TypeId.IHDR === chunk.type) {
-			this.info[TypeId.IHDR] = chunk;
-		}
 		yield this.decode(chunk);
 	    } while (TypeId.IEND !== type);
 	}
 
-	static newImageFromFile(name: string): Image2d {
+	static async imageFromFile(name: string): Promise<Image2dOrNull> {
+		let ins = new BufReader(await Deno.open(name));
+		let png = new PNGStream(ins);
+		await png.open();
+
+		let result: Image2dOrNull = null;
+		for await (const chunk of png.chunks()) {
+			console.log(chunk.toString());
+
+			if (TypeId.IHDR === chunk.type) {
+				const h = chunk as HeaderChunk;
+				result = new Image2d(h.width, h.height);
+			}
+		}
+		return result;
 	}
 }
+
+/*
+
+function fail(location: number): Error {
+	return new Error(`Test failure ${location}`);
+}
+
+class Tester {
+	constructor() {
+	}
+
+	async test1(): Promise<boolean> {
+		let fail = false;
+
+		Object.keys(TypeId).forEach((name) => {
+			let val = TypeId[name];
+			let str = typeName(val);
+
+			if (name !== str) fail = true;
+			console.log(`${name} ${str}`);
+		});
+		return !fail;
+	}
+
+	async run(): Promise<void> {
+		if (! await this.test1()) throw fail(1);
+	}
+}
+
+(new Tester()).run().then(() => {
+	console.log('Tests passed.');
+}).catch((e) => { console.error(e); });
+
+/**/
+

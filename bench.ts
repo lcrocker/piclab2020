@@ -1,8 +1,8 @@
 import minimist from 'https://deno.land/x/deno_minimist@v1.0.2/mod.ts';
 import { BufReader } from 'https://deno.land/std/io/bufio.ts';
 
-import { TypeId, typeName, Chunk, InputStream as PNGFile } from './png.ts';
-import { Image2d } from './image2d.ts';
+import { TypeId, typeName, Chunk, PNGStream } from './png.ts';
+import { Image2d, Image2dOrNull } from './image2d.ts';
 
 const SCALE = 1. / 255;
 function byteToFloat(b: number): number { return SCALE * b; }
@@ -26,12 +26,8 @@ class Converter {
     async convert(): Promise<void> {
         console.log(`${this.infile} --> ${this.outfile}`);
 
-	const ps = new PNGFile();
-	await ps.open(new BufReader(await Deno.open(this.infile)));
-
-	for await (const chunk of ps.chunks()) {
-	    console.log(chunk.toString());
-	}
+	let image: Image2dOrNull = await PNGStream.imageFromFile(this.infile);
+	console.log(image);
     }
 }
 

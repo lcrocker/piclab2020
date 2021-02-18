@@ -75,6 +75,11 @@ export class Image2d {
 		this.width = w;
 		this.height = h;
 	}
+
+	toString(): string {
+		return `Image2d (${this.width} x ${this.height})`;
+	}
 }
 
+export type Image2dOrNull = Image2d | null;
 
