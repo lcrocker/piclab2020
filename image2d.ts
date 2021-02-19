@@ -18,7 +18,7 @@ export enum ColorSpace {
 	YPbPr,
 	XvYCbCr,
 	DolbyICtCp
-};
+}
 
 export const ColorSpaceComponentCount = new Map<ColorSpace, number>([
 	[ ColorSpace.Grayscale, 1 ],
@@ -44,7 +44,7 @@ export const ColorSpaceComponentCount = new Map<ColorSpace, number>([
 export enum OtherImageData {
 	Alpha = 101,
 	Index
-};
+}
 
 type ImageComponentType = ColorSpace | OtherImageData;
 
@@ -54,7 +54,7 @@ export class ImageComponent {
 	public height: number;
 	public data: Float32Array[] = [];
 	public modifiedTime: Date;
-	public loaded: boolean = false;
+	public loaded = false;
 
 	constructor(t: ImageComponentType, w: number, h: number) {
 		this.type = t;

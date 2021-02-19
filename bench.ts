@@ -16,7 +16,7 @@ class Converter {
         this.infile = f;
         this.outfile = f.replace(/[^A-Za-z0-9_.]/g, '_');
 
-        const	dot = this.outfile.lastIndexOf('.');
+        const        dot = this.outfile.lastIndexOf('.');
         if (-1 === dot) this.baseName = this.outfile;
         else this.baseName = this.outfile.substr(0, dot);
 
@@ -25,9 +25,8 @@ class Converter {
 
     async convert(): Promise<void> {
         console.log(`${this.infile} --> ${this.outfile}`);
-
-	let image: Image2dOrNull = await PNGStream.imageFromFile(this.infile);
-	console.log(image);
+        const image = await PNGStream.imageFromFile(this.infile);
+        console.log(image);
     }
 }
 
@@ -39,9 +38,9 @@ class App {
     }
 
     async run(): Promise<void> {
-        const	argv = minimist(Deno.args, {
+        const        argv = minimist(Deno.args, {
             boolean: [ 'v' ],
-	    string: [ '_' ]
+            string: [ '_' ]
         });
         this.verbose = argv.v as boolean;
         this.files = argv._ as string[];
@@ -50,15 +49,15 @@ class App {
             throw new Error('Must have at least one input file.');
         }
         for (let i = 0; i < this.files.length; i += 1) {
-	    const startTime = new Date();
-	    console.log(`started ${startTime.toISOString()}`);
+            const startTime = new Date();
+            console.log(`started ${startTime.toISOString()}`);
 
             await (new Converter(this.files[i])).convert();
 
-	    const endTime = new Date();
-	    console.log(`finished ${endTime.toISOString()}`);
-	    const duration = endTime.valueOf() - startTime.valueOf();
-	    console.log(`running time ${duration} ms`);
+            const endTime = new Date();
+            console.log(`finished ${endTime.toISOString()}`);
+            const duration = endTime.valueOf() - startTime.valueOf();
+            console.log(`running time ${duration} ms`);
         }
     }
 }
