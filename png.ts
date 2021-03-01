@@ -2,7 +2,7 @@
 import { zlib, unzlib } from 'https://deno.land/x/denoflate/mod.ts';
 import { BufReader } from 'https://deno.land/std/io/bufio.ts';
 
-import { Image2d, Image2dOrNull } from './image2d.ts';
+import { Image2d, ImageComponent, ImageComponentType } from './image2d.ts';
 
 const signatureWord1 = 0x89504E47,
     signatureWord2 = 0x0D0A1A0A;
@@ -36,6 +36,13 @@ export function isAncillary(id: number) { return (0 !== (id & 0x20000000)); }
 export function isPublic(id: number) { return (0 === (id & 0x00200000)); }
 export function isCopySafe(id: number) { return (0 !== (id & 0x00000020)); }
 
+export function typeName(id: number) {
+    return String.fromCharCode(0xFF & (id >> 24)) +
+        String.fromCharCode(0xFF & (id >> 16)) +
+        String.fromCharCode(0xFF & (id >> 8)) +
+        String.fromCharCode(0xFF & id);
+}
+
 export const enum ColorType {
     Gray = 0,
     Color = 2,
@@ -43,7 +50,7 @@ export const enum ColorType {
     GrayAlpha = 4,
     ColorAlpha = 6
 }
-function isColorType(n: number): boolean {
+function isColorType(n: number): n is ColorType {
     return (0 === n || 2 === n || 3 === n || 4 === n || 6 === n);
 }
 const colorTypeIndicators = [ 'GS', '??', 'TC', 'IN', 'GA', '??', 'CA' ];
@@ -51,30 +58,50 @@ const colorTypeIndicators = [ 'GS', '??', 'TC', 'IN', 'GA', '??', 'CA' ];
 export const enum CompressionMethod {
     Deflate = 0
 }
-function isCompressionMethod(n: number): boolean { return 0 === n; }
+function isCompressionMethod(n: number): n is CompressionMethod { return 0 === n; }
 const compressionMethodIndicators = [ 'Z' ];
 
 export const enum FilterMethod {
     ByLine = 0
 }
-function isFilterMethod(n: number): boolean { return 0 === n; }
+function isFilterMethod(n: number): n is FilterMethod { return 0 === n; }
 const filterMethodIndicators = [ 'L' ];
 
 export const enum InterlaceMethod {
     None = 0,
     Adam7 = 1
 }
-function isInterlaceMethod(n: number): boolean { return (0 === n || 1 === n); }
+function isInterlaceMethod(n: number): n is InterlaceMethod { return (0 === n || 1 === n); }
 const interlaceMethodIndicators = [ 'N', '7' ];
+
+type EightOrSixteen = 8 | 16;
+function isEightOrSixteen(n: number): n is EightOrSixteen { return (8 === n || 16 === n); }
+
+export type ImageBitDepth = 1 | 2 | 4 | 8 | 16;
+function isImageBitDepth(n: number): n is ImageBitDepth {
+    return (1 === n || 2 === n || 4 === n || 8 === n || 16 === n);
+}
+
+export const enum DistanceUnit {
+    Unknown = 0,
+    Meter = 1
+}
+function isDistanceUnit(n: number): n is DistanceUnit { return (0 === n || 1 === n); }
+const distanceUnitIndicators = [ '?', 'm' ];
 
 export interface Chunk {
     type: number;
     data?: Uint8Array;
 }
-
 export interface ChunkWithData extends Chunk {
-    type: number;
     data: Uint8Array;
+}
+
+export function isChunkWithData(obj: Chunk): obj is ChunkWithData {
+    const wobj = obj as Partial<ChunkWithData>;
+    if ('object' !== typeof wobj.data) return false;
+    if (! (wobj.data instanceof Uint8Array)) return false;
+    return true;
 }
 
 export class BaseChunk implements Chunk {
@@ -103,7 +130,7 @@ export class BaseChunk implements Chunk {
 export class HeaderChunk extends BaseChunk {
     public width: number;
     public height: number;
-    public bitDepth: number;
+    public bitDepth: ImageBitDepth;
     public colorType: ColorType;
     public compressionMethod: CompressionMethod;
     public filterMethod: FilterMethod;
@@ -112,11 +139,11 @@ export class HeaderChunk extends BaseChunk {
     constructor(
         w: number,
         h: number,
-        b: number,
-        c: number,
-        z: number,
-        f: number,
-        i: number) {
+        b: ImageBitDepth,
+        c: ColorType,
+        z: CompressionMethod,
+        f: FilterMethod,
+        i: InterlaceMethod) {
 
         super(TypeId.IHDR);
 
@@ -136,7 +163,7 @@ export class HeaderChunk extends BaseChunk {
     }
 
     toString(): string {
-        return `IHDR (${this.width} x ${this.height} x ${this.bitDepth} ${colorTypeIndicators[this.colorType]} ${compressionMethodIndicators[this.compressionMethod]} ${filterMethodIndicators[this.filterMethod]} ${interlaceMethodIndicators[this.interlaceMethod]})`;
+        return `IHDR ${this.width} \u00d7 ${this.height} \u00d7 ${this.bitDepth} ${colorTypeIndicators[this.colorType]} ${compressionMethodIndicators[this.compressionMethod]} ${filterMethodIndicators[this.filterMethod]} ${interlaceMethodIndicators[this.interlaceMethod]}`;
     }
 
     toBytes(): Uint8Array {
@@ -159,25 +186,30 @@ export class HeaderChunk extends BaseChunk {
         const width = dv.getUint32(0, false);
         const height = dv.getUint32(4, false);
 
+        if (! isImageBitDepth(d[8])) throw new Error(`Bad bit depth ${d[8]} (1, 2, 4, 8, or 16)`);
+        if (! isColorType(d[9])) throw new Error(`Bad color type ${d[9]}`);
+        if (! isCompressionMethod(d[10])) throw new Error(`Bad compression method ${d[10]}`);
+        if (! isFilterMethod(d[11])) throw new Error(`Bad filter method ${d[11]}`);
+        if (! isInterlaceMethod(d[12])) throw new Error(`Bad interlace method ${d[12]}`);
+
         const result = new HeaderChunk(width, height, d[8], d[9], d[10], d[11], d[12]);
         result.data = d;
         return result;
     }
 
-	dataSize(): number {
-		let bytesPerLine = this.width;
+    bytesPerLine(): number {
+        let b = this.width;
 
-		if (16 === this.bitDepth) { bytesPerLine *= 2; }
-		else if (4 === this.bitDepth) { bytesPerLine = Math.floor((this.width + 1) / 2); }
-		else if (2 === this.bitDepth) { bytesPerLine = Math.floor((this.width + 3) / 4); }
-		else if (1 === this.bitDepth) { bytesPerLine = Math.floor((this.width + 7) / 8); }
+        if (16 === this.bitDepth) { b *= 2; }
+        else if (4 === this.bitDepth) { b = Math.floor((this.width + 1) / 2); }
+        else if (2 === this.bitDepth) { b = Math.floor((this.width + 3) / 4); }
+        else if (1 === this.bitDepth) { b = Math.floor((this.width + 7) / 8); }
 
-		if (ColorType.GrayAlpha === this.colorType) { bytesPerLine *= 2; }
-		if (ColorType.Color === this.colorType) { bytesPerLine *= 3; }
-		if (ColorType.ColorAlpha === this.colorType) { bytesPerLine *= 4; }
-
-		return this.height * (1 + bytesPerLine);
-	}
+        if (ColorType.GrayAlpha === this.colorType) { b *= 2; }
+        if (ColorType.Color === this.colorType) { b *= 3; }
+        if (ColorType.ColorAlpha === this.colorType) { b *= 4; }
+        return b + 1;
+    }
 }
 
 export type PaletteEntry = [ number, number, number ];
@@ -189,7 +221,6 @@ export class PaletteChunk extends BaseChunk {
         colors: PaletteEntry[]) {
 
         super(TypeId.PLTE);
-
         if (colors.length > 256) throw new Error(`Palette contains ${colors.length} entries (max 256)`);
         this.colors = colors;
     }
@@ -242,21 +273,21 @@ export class ImageDataChunk extends BaseChunk {
 }
 
 export class EndChunk extends BaseChunk {
-    constructor(
-        t: number,
-        d: Uint8Array) {
-
-        super(t, d);
+    constructor() {
+        super(TypeId.IEND);
     }
 
+    toString(): string { return 'IEND'; }
+
     toBytes(): Uint8Array {
-        const result = new Uint8Array(4);
-        // TODO
-        return result;
+        this.data = new Uint8Array(0);
+        return this.data;
     }
 
     static fromBytes(d: Uint8Array): EndChunk {
-        return new EndChunk(TypeId.IEND, d);
+        const result = new EndChunk();
+        result.data = d;
+        return result;
     }
 }
 
@@ -299,21 +330,31 @@ export class ChromaticityChunk extends BaseChunk {
 }
 
 export class GammaChunk extends BaseChunk {
-    constructor(
-        t: number,
-        d: Uint8Array) {
+    public value: number;
 
-        super(t, d);
+    constructor(
+        v: number) {
+
+        super(TypeId.gAMA);
+        this.value = v;
     }
 
+    toString(): string { return `gAMA ${this.value}`; }
+
     toBytes(): Uint8Array {
-        const result = new Uint8Array(4);
-        // TODO
-        return result;
+        this.data = new Uint8Array(4);
+        const dv = new DataView(this.data.buffer);
+        dv.setUint32(0, 100000 * this.value, false);
+        return this.data;
     }
 
     static fromBytes(d: Uint8Array): GammaChunk {
-        return new GammaChunk(TypeId.gAMA, d);
+        const dv = new DataView(d.buffer);
+        const v = dv.getUint32(0, false);
+
+        const result = new GammaChunk(v / 100000);
+        result.data = d;
+        return result;
     }
 }
 
@@ -337,21 +378,35 @@ export class ICCPChunk extends BaseChunk {
 }
 
 export class BitDepthChunk extends BaseChunk {
-    constructor(
-        t: number,
-        d: Uint8Array) {
+    public depths: ImageBitDepth[];
 
-        super(t, d);
+    constructor(
+        d: ImageBitDepth[]) {
+
+        super(TypeId.sBIT);
+        this.depths = d;
     }
 
+    toString(): string { return `sBIT ${this.depths}`; }
+
     toBytes(): Uint8Array {
-        const result = new Uint8Array(4);
-        // TODO
-        return result;
+        this.data = new Uint8Array(this.depths.length);
+        for (let i = 0; i < this.depths.length; i += 0) {
+            this.data[i] = this.depths[i];
+        }
+        return this.data;
     }
 
     static fromBytes(d: Uint8Array): BitDepthChunk {
-        return new BitDepthChunk(TypeId.sBIT, d);
+        const depths: ImageBitDepth[] = [];
+        for (let i = 0; i < d.length; i += 1) {
+            const b = d[i];
+            if (! isImageBitDepth(b)) throw new Error(`Invalid bit depth ${b}`);
+            depths.push(b);
+        }
+        const result = new BitDepthChunk(depths);
+        result.data = d;
+        return result;
     }
 }
 
@@ -470,40 +525,150 @@ export class HistogramChunk extends BaseChunk {
 }
 
 export class PhysicalSizeChunk extends BaseChunk {
-    constructor(
-        t: number,
-        d: Uint8Array) {
+    public x: number;
+    public y: number;
+    public unit: DistanceUnit;
 
-        super(t, d);
+    constructor(
+        x: number,
+        y: number,
+        u: DistanceUnit) {
+
+        super(TypeId.pHYs);
+        this.x = x;
+        this.y = y;
+        this.unit = u;
     }
 
+    toString(): string { return `pHYs (${this.x} \u00d7 ${this.y} pixels/${distanceUnitIndicators[this.unit]})`; }
+
     toBytes(): Uint8Array {
-        const result = new Uint8Array(4);
-        // TODO
-        return result;
+        this.data = new Uint8Array(9);
+        const dv = new DataView(this.data.buffer);
+        dv.setUint32(0, this.x, false);
+        dv.setUint32(4, this.y, false);
+        this.data[8] = this.unit;
+        return this.data;
     }
 
     static fromBytes(d: Uint8Array): PhysicalSizeChunk {
-        return new PhysicalSizeChunk(TypeId.pHYs, d);
+        const dv = new DataView(d.buffer);
+        const x = dv.getUint32(0, false);
+        const y = dv.getUint32(4, false);
+
+        if (! isDistanceUnit(d[8])) throw new Error(`Invalid distance unit ${d[8]}`);
+        const u = d[8] as DistanceUnit;
+
+        const result = new PhysicalSizeChunk(x, y, u);
+        result.data = d;
+        return result;
     }
 }
 
-export class ExtendedPaletteChunk extends BaseChunk {
-    constructor(
-        t: number,
-        d: Uint8Array) {
+export type SuggestedPaletteEntry = [ number, number, number, number, number ];
 
-        super(t, d);
+export class SuggestedPaletteChunk extends BaseChunk {
+    public name: string;
+    public bits: EightOrSixteen;
+    public entries: SuggestedPaletteEntry[];
+
+    constructor(
+        name: string,
+        bits: EightOrSixteen,
+        entries: SuggestedPaletteEntry[]) {
+
+        if (name.length > 79) throw new Error(`Suggested palette name ${name.length} bytes (79 max)`);
+
+        super(TypeId.sPLT);
+        this.name = name;
+        this.bits = bits;
+        this.entries = entries;
+    }
+
+    toString(): string {
+        return  `sPLT "${this.name}" (${this.entries.length} entries)`;
     }
 
     toBytes(): Uint8Array {
-        const result = new Uint8Array(4);
-        // TODO
-        return result;
+        const count = this.entries.length;
+        const esize = (8 === this.bits) ? 6 : 10;
+        this.data = new Uint8Array(this.name.length + 2 + esize * this.entries.length);
+
+        let index = 0;
+        const dv = new DataView(this.data.buffer);
+
+        for (index = 0; index < this.name.length; index += 1) {
+            let c = this.name.charCodeAt(index);
+            if (c > 255) c = '?'.charCodeAt(0);       // Not valid ISO-8859-1
+            this.data[index] = c;
+        }
+        this.data[index] = 0;
+        this.data[index + 1] = this.bits;
+        index += 2;
+
+        for (let i = 0; i < count; i += 1) {
+            if (8 === this.bits) {
+                this.data[index] = 255 * this.entries[i][0];
+                this.data[index + 1] = 255 * this.entries[i][1];
+                this.data[index + 2] = 255 * this.entries[i][2];
+                this.data[index + 3] = 255 * this.entries[i][3];
+                index += 4;
+            } else {
+                dv.setUint16(index, 65535 * this.entries[i][0], false);
+                dv.setUint16(index + 2, 65535 * this.entries[i][1], false);
+                dv.setUint16(index + 4, 65535 * this.entries[i][2], false);
+                dv.setUint16(index + 6, 65535 * this.entries[i][3], false);
+                index += 8;
+            }
+            dv.setUint16(index, 65535 * this.entries[i][4]);
+            index += 2;
+        }
+        return this.data;
     }
 
-    static fromBytes(d: Uint8Array): ExtendedPaletteChunk {
-        return new ExtendedPaletteChunk(TypeId.sPLT, d);
+    static fromBytes(d: Uint8Array): SuggestedPaletteChunk {
+        const dv = new DataView(d.buffer);
+        let index = 0;
+        let name = '';
+
+        while (index < 80) {
+            if (0 === d[index]) break;
+            name += String.fromCharCode(d[index]);
+            index += 1;
+        }
+        const bits = d[index + 1];
+        if (! isEightOrSixteen(bits))
+            throw Error(`invalid bit depth ${bits} (must be 8 or 16)`);
+        index += 2;
+
+        const entries: SuggestedPaletteEntry[] = [];
+        const count = (d.length - index) / ((8 === bits) ? 6 : 10);
+        if (count !== Math.floor(count))
+            throw new Error(`Bad palette size ${d.length} (must = 0 mod ${(8===bits)?6:10})`);
+
+        for (let i = 0; i < count; i += 1) {
+            const e: number[] = [];
+
+            if (8 === bits) {
+                e.push(d[index] / 255);
+                e.push(d[index + 1] / 255);
+                e.push(d[index + 2] / 255);
+                e.push(d[index + 3] / 255);
+                index += 4;
+            } else {
+                e.push(dv.getUint16(index, false) / 65535);
+                e.push(dv.getUint16(index + 2, false) / 65535);
+                e.push(dv.getUint16(index + 4, false) / 65535);
+                e.push(dv.getUint16(index + 6, false) / 65535);
+                index += 8;
+            }
+            e.push(dv.getUint16(index, false) / 65535);
+            index += 2;
+            entries.push(e as SuggestedPaletteEntry);
+        }
+        const result = new SuggestedPaletteChunk(name, bits, entries);
+        result.data = d;
+        return result;
     }
 }
 
@@ -583,25 +748,15 @@ export class StereoChunk extends BaseChunk {
     }
 }
 
-export function isChunkWithData(obj: any): obj is ChunkWithData {
-    if ('object' !== typeof obj) return false;
-    if (! obj) return false;
-
-    if ('number' !== typeof obj['type']) return false;
-    if (! obj.data) return false;
-    if (! (obj.data instanceof Uint8Array)) return false;
-    return true;
-}
-
-export function typeName(id: number) {
-    return String.fromCharCode(0xFF & (id >> 24)) +
-        String.fromCharCode(0xFF & (id >> 16)) +
-        String.fromCharCode(0xFF & (id >> 8)) +
-        String.fromCharCode(0xFF & id);
-}
-
 export class PNGStream {
     private reader: BufReader;
+    private result: Image2d | null = null;
+    private header: HeaderChunk | null = null;
+    private palette: PaletteChunk | null = null;
+    private gamma = 1.0;
+    private bitDepths: ImageBitDepth[] = [];
+    private suggestedPalettes: Record<string, SuggestedPaletteChunk> = {};
+    private size: PhysicalSizeChunk | null = null;
 
     constructor(r: BufReader) {
         this.reader = r;
@@ -648,7 +803,7 @@ export class PNGStream {
         throw new Error(`Chunk expected to have data that we can decode`);
     }
 
-    decode(cin: ChunkWithData): BaseChunk {
+    decodeChunk(cin: ChunkWithData): BaseChunk {
         switch (cin.type) {
         case TypeId.IHDR:   return HeaderChunk.fromBytes(cin.data);
         case TypeId.PLTE:   return PaletteChunk.fromBytes(cin.data);
@@ -666,7 +821,7 @@ export class PNGStream {
         case TypeId.bKGD:   return BackgroundChunk.fromBytes(cin.data);
         case TypeId.hIST:   return HistogramChunk.fromBytes(cin.data);
         case TypeId.pHYs:   return PhysicalSizeChunk.fromBytes(cin.data);
-        case TypeId.sPLT:   return ExtendedPaletteChunk.fromBytes(cin.data);
+        case TypeId.sPLT:   return SuggestedPaletteChunk.fromBytes(cin.data);
         case TypeId.tIME:   return TimeChunk.fromBytes(cin.data);
         case TypeId.dSIG:   return SignatureChunk.fromBytes(cin.data);
         case TypeId.eXIf:   return ExifChunk.fromBytes(cin.data);
@@ -696,30 +851,60 @@ export class PNGStream {
             }
             if (null !== partial && TypeId.IDAT !== chunk.type) {
                 // partial.data = unzlib(partial.data);
-                yield this.decode(partial);
+                yield this.decodeChunk(partial);
                 partial = null;
             }
-            yield this.decode(chunk);
+            yield this.decodeChunk(chunk);
         } while (TypeId.IEND !== type);
     }
 
-    static async imageFromFile(name: string): Promise<Image2dOrNull> {
-        const ins = new BufReader(await Deno.open(name));
-        const png = new PNGStream(ins);
-        await png.open();
+    async decodeImageData(chunk: ImageDataChunk): Promise<void> {
+    }
 
-        let result: Image2dOrNull = null;
-        for await (const chunk of png.chunks()) {
+    async getImage2d(): Promise<Image2d | null> {
+        await this.open();
+
+        for await (const chunk of this.chunks()) {
             console.log(chunk.toString());
 
-            if (TypeId.IHDR === chunk.type) {
-                const h = chunk as HeaderChunk;
-                result = new Image2d(h.width, h.height);
-            }
-            if (TypeId.IDAT === chunk.type) {
+            switch (chunk.type) {
+            case TypeId.IHDR:
+                this.header = chunk as HeaderChunk;
+                this.result = new Image2d(this.header.width, this.header.height);
+                break;
+            case TypeId.PLTE:
+                this.palette = chunk as PaletteChunk;
+                break;
+            case TypeId.sPLT:
+                if (! (chunk instanceof SuggestedPaletteChunk))
+                    throw new Error('Expected suggested palette chunk here');
+                this.suggestedPalettes[chunk.name] = chunk;
+                break;
+            case TypeId.gAMA:
+                this.gamma = (chunk as GammaChunk).value;
+                break;
+            case TypeId.sBIT:
+                this.bitDepths = (chunk as BitDepthChunk).depths;
+                break;
+            case TypeId.pHYs:
+                this.size = chunk as PhysicalSizeChunk;
+                break;
+            case TypeId.IDAT:
+                this.decodeImageData(chunk as ImageDataChunk).then(() => {
+                    if (! this.result) throw new Error('IHDR must appear before IDAT');
+                    this.result.loaded = true;
+                }).catch((err) => {
+                    throw new Error(`Failed to decode image data`);
+                });
+                break;
+            case TypeId.IEND:
+                // if (0 === components.size) throw new Error(`No image data`);
+                break;
+            default:
+                // throw new Error(`Unknown chunk type: ${chunk.type.toString(16)}`)
             }
         }
-        return result;
+        return this.result;
     }
 }
 

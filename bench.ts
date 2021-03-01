@@ -25,7 +25,8 @@ class Converter {
 
     async convert(): Promise<void> {
         console.log(`${this.infile} --> ${this.outfile}`);
-        const image = await PNGStream.imageFromFile(this.infile);
+        const png = new PNGStream(new BufReader(await Deno.open(this.infile)));
+        const image = await png.getImage2d();
         console.log(image);
     }
 }
@@ -33,7 +34,7 @@ class Converter {
 class App {
     public verbose = false;
     public files: string[] = [];
-    
+
     constructor() {
     }
 
