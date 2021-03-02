@@ -2,7 +2,7 @@
 import { zlib, unzlib } from 'https://deno.land/x/denoflate/mod.ts';
 import { BufReader } from 'https://deno.land/std/io/bufio.ts';
 
-import { Image2d, ImageComponent, ImageComponentType } from './image2d.ts';
+import { Image2d, ColorSpace, OtherImageData, ImageComponent, ImageComponentType } from './image2d.ts';
 
 const signatureWord1 = 0x89504E47,
     signatureWord2 = 0x0D0A1A0A;
@@ -54,6 +54,14 @@ function isColorType(n: number): n is ColorType {
     return (0 === n || 2 === n || 3 === n || 4 === n || 6 === n);
 }
 const colorTypeIndicators = [ 'GS', '??', 'TC', 'IN', 'GA', '??', 'CA' ];
+
+export function samplesPerPixel(c: ColorType): number {
+    if (ColorType.Gray === c || ColorType.Indexed === c) return 1;
+    if (ColorType.GrayAlpha === c) return 2;
+    if (ColorType.Color === c) return 3;
+    if (ColorType.ColorAlpha === c) return 4;
+    throw new Error('unknown color type');
+}
 
 export const enum CompressionMethod {
     Deflate = 0
@@ -859,6 +867,70 @@ export class PNGStream {
     }
 
     async decodeImageData(chunk: ImageDataChunk): Promise<void> {
+        const h = this.result.header;
+
+        if (ColorType.Gray === h.colorType || ColorType.GrayAlpha === h.colorType) {
+            this.result.data.set(ColorSpace.Grayscale, new ImageComponent(
+                ColorSpace.Grayscale, h.width, h.height
+            ));
+        }
+        if (ColorType.Color === h.colorType || ColorType.ColorAlpha === h.colorType) {
+            this.result.data.set(ColorSpace.RGB, new ImageComponent(
+                ColorSpace.RGB, h.width, h.height
+            ));
+        }
+        if (ColorType.GrayAlpha === h.colorType || ColorType.ColorAlpha === h.colorType) {
+            this.result.data.set(OtherImageData.Alpha, new ImageComponent(
+                OtherImageData.Alpha, h.width, h.height
+            ));
+        }
+        if (ColorType.Indexed === h.colorType) {
+            this.result.data.set(OtherImageData.Alpha, new ImageComponent(
+                OtherImageData.Alpha, h.width, h.height
+            ));
+        }
+        const dv = new DataView(chunk.data.buffer);
+        let index = 0;
+        const spp = samplesPerPixel(h.colorType);
+        const sampleData: Float32Array[] = [];
+
+        switch (h.colorType) {
+        }
+
+        if (InterlaceMethod.None === h.interlaceMethod) {
+            for (let line = 0; line < h.height; line += 1) {
+                const filter = chunk.data[index];
+                index += 1;
+
+                for (let pixel = 0; pixel < h.width; pixel += 1) {
+                    for (let s = 0; s < spp; s += 1) {
+                        let v = 0;
+
+                        switch (h.bitDepth) {
+                        case 1:
+                        case 2:
+                        case 4:
+                        case 8:
+                            v = chunk.data[index] / 255;
+                            index += 1;
+                            break;
+                        case 16:
+                            v = dv.getUint16(index, false) / 65535;
+                            index += 2;
+                            break;
+                        }
+                    }
+                }
+            }
+        } else {
+            // Interlace pass 1
+            // Interlace pass 2
+            // Interlace pass 3
+            // Interlace pass 4
+            // Interlace pass 5
+            // Interlace pass 6
+            // Interlace pass 7
+        }
     }
 
     async getImage2d(): Promise<Image2d | null> {
