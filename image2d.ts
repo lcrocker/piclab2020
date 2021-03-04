@@ -64,6 +64,10 @@ export class ImageComponent {
     }
 }
 
+export function isImage2d(obj: unknown) {
+	return false;
+}
+
 export class Image2d {
     public width: number;
     public height: number;
@@ -79,6 +83,19 @@ export class Image2d {
 
     toString(): string {
         return `Image2d (${this.width} x ${this.height})`;
+    }
+
+    toJson(): string {
+	return '{}';
+    }
+
+    static fromObject(obj: unknown) {
+	if (! isImage2d(obj)) throw new Error('not an image object');
+	return obj as Image2d;
+    }
+
+    static fromJson(j: string) {
+	return Image2d.fromObject(JSON.parse(j));
     }
 }
 
