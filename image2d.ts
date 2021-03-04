@@ -73,8 +73,17 @@ export class Image2d {
     public height: number;
     public hSize = 2000;
     public vSize = 2000;
+    public gamma = 0.45455;
+    public whiteX = 0.3127;
+    public whiteY = 0.329;
+    public redX = 0.64;
+    public redY = 0.33;
+    public greenX = 0.3;
+    public greenY = 0.6;
+    public blueX = 0.15;
+    public blueY = 0.06;
+
     private data: Map<ImageComponentType, ImageComponent> = new Map();
-    public loaded = false;
 
     constructor(w: number, h: number) {
         this.width = w;

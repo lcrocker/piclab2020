@@ -319,21 +319,62 @@ export class TransparencyChunk extends BaseChunk {
 }
 
 export class ChromaticityChunk extends BaseChunk {
-    constructor(
-        t: number,
-        d: Uint8Array) {
+    public whiteX: number;
+    public whiteY: number;
+    public redX: number;
+    public redY: number;
+    public greenX: number;
+    public greenY: number;
+    public blueX: number;
+    public blueY: number;
 
-        super(t, d);
+    constructor(
+        wx: number, wy: number,
+        rx: number, ry: number,
+        gx: number, gy: number,
+        bx: number, by: number) {
+
+        super(TypeId.cHRM);
+
+        this.whiteX = wx;   this.whiteY = wy;
+        this.redX = rx;     this.redY = ry;
+        this.greenX = gx;   this.greenY = gy;
+        this.blueX = bx;    this.blueY = by;
+    }
+
+    toString(): string {
+        return `cHRM ${this.whiteX} ${this.whiteY} ${this.redX} ${this.redY} ${this.greenX} ${this.greenY} ${this.blueX} ${this.blueY}`;
     }
 
     toBytes(): Uint8Array {
-        const result = new Uint8Array(4);
-        // TODO
-        return result;
+        this.data = new Uint8Array(32);
+        const dv = new DataView(this.data.buffer);
+        dv.setUint32(0, 100000 * this.whiteX, false);
+        dv.setUint32(4, 100000 * this.whiteY, false);
+        dv.setUint32(8, 100000 * this.redX, false);
+        dv.setUint32(12, 100000 * this.redY, false);
+        dv.setUint32(16, 100000 * this.greenX, false);
+        dv.setUint32(20, 100000 * this.greenY, false);
+        dv.setUint32(24, 100000 * this.blueX, false);
+        dv.setUint32(28, 100000 * this.blueY, false);
+        return this.data;
     }
 
     static fromBytes(d: Uint8Array): ChromaticityChunk {
-        return new ChromaticityChunk(TypeId.cHRM, d);
+        const dv = new DataView(d.buffer);
+
+        const wx = dv.getUint32(0, false) / 100000;
+        const wy = dv.getUint32(0, false) / 100000;
+        const rx = dv.getUint32(0, false) / 100000;
+        const ry = dv.getUint32(0, false) / 100000;
+        const gx = dv.getUint32(0, false) / 100000;
+        const gy = dv.getUint32(0, false) / 100000;
+        const bx = dv.getUint32(0, false) / 100000;
+        const by = dv.getUint32(0, false) / 100000;
+
+        const result = new ChromaticityChunk(wx, wy, rx, ry, gx, gy, bx, by);
+        result.data = d;
+        return result;
     }
 }
 
@@ -756,12 +797,15 @@ export class StereoChunk extends BaseChunk {
     }
 }
 
+export type Chromaticities = [ number, number, number, number, number, number, number, number ];
+
 export class PNGStream {
     private reader: BufReader;
     private result: Image2d | null = null;
     private header: HeaderChunk | null = null;
     private palette: PaletteChunk | null = null;
     private gamma = 1.0;
+    private chromaticities: Chromaticities | null = null;
     private bitDepths: ImageBitDepth[] = [];
     private suggestedPalettes: Record<string, SuggestedPaletteChunk> = {};
     private size: PhysicalSizeChunk | null = null;
@@ -867,8 +911,9 @@ export class PNGStream {
     }
 
     async decodeImageData(chunk: ImageDataChunk): Promise<void> {
-        const h = this.result.header;
-
+        const h = this.header;
+        if (! h) throw new Error('must have header to decode image data');
+/*
         if (ColorType.Gray === h.colorType || ColorType.GrayAlpha === h.colorType) {
             this.result.data.set(ColorSpace.Grayscale, new ImageComponent(
                 ColorSpace.Grayscale, h.width, h.height
@@ -893,44 +938,7 @@ export class PNGStream {
         let index = 0;
         const spp = samplesPerPixel(h.colorType);
         const sampleData: Float32Array[] = [];
-
-        switch (h.colorType) {
-        }
-
-        if (InterlaceMethod.None === h.interlaceMethod) {
-            for (let line = 0; line < h.height; line += 1) {
-                const filter = chunk.data[index];
-                index += 1;
-
-                for (let pixel = 0; pixel < h.width; pixel += 1) {
-                    for (let s = 0; s < spp; s += 1) {
-                        let v = 0;
-
-                        switch (h.bitDepth) {
-                        case 1:
-                        case 2:
-                        case 4:
-                        case 8:
-                            v = chunk.data[index] / 255;
-                            index += 1;
-                            break;
-                        case 16:
-                            v = dv.getUint16(index, false) / 65535;
-                            index += 2;
-                            break;
-                        }
-                    }
-                }
-            }
-        } else {
-            // Interlace pass 1
-            // Interlace pass 2
-            // Interlace pass 3
-            // Interlace pass 4
-            // Interlace pass 5
-            // Interlace pass 6
-            // Interlace pass 7
-        }
+*/
     }
 
     async getImage2d(): Promise<Image2d | null> {
@@ -955,6 +963,16 @@ export class PNGStream {
             case TypeId.gAMA:
                 this.gamma = (chunk as GammaChunk).value;
                 break;
+            case TypeId.cHRM: {
+                const c = (chunk as ChromaticityChunk);
+                this.chromaticities = [
+                    c.whiteX, c.whiteY,
+                    c.redX, c.redY,
+                    c.greenX, c.greenY,
+                    c.blueX, c.blueY
+                ];
+            }
+                break;
             case TypeId.sBIT:
                 this.bitDepths = (chunk as BitDepthChunk).depths;
                 break;
@@ -964,7 +982,6 @@ export class PNGStream {
             case TypeId.IDAT:
                 this.decodeImageData(chunk as ImageDataChunk).then(() => {
                     if (! this.result) throw new Error('IHDR must appear before IDAT');
-                    this.result.loaded = true;
                 }).catch((err) => {
                     throw new Error(`Failed to decode image data`);
                 });
